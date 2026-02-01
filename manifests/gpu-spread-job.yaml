@@ -1,0 +1,27 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: gpu-spread
+spec:
+  completions: 2
+  parallelism: 2
+  template:
+    metadata:
+      labels:
+        app: gpu-spread
+    spec:
+      restartPolicy: Never
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: gpu-spread
+      containers:
+        - name: nvidia-smi
+          image: nvidia/cuda:12.2.0-base-ubuntu22.04
+          command: ["bash", "-lc", "nvidia-smi"]
+          resources:
+            limits:
+              nvidia.com/gpu: 1

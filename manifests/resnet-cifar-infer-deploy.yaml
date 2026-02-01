@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: resnet-cifar-infer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: resnet-cifar-infer
+  template:
+    metadata:
+      labels:
+        app: resnet-cifar-infer
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: gpu-node-1
+      volumes:
+        - name: examples
+          hostPath:
+            path: /root/K8S_Inference_Platform/examples
+      containers:
+        - name: server
+          image: pytorch/pytorch:2.2.2-cuda12.1-cudnn8-runtime
+          command: ["bash", "-lc"]
+          args:
+            - |
+              set -euo pipefail
+              python /workspace/resnet_cifar_infer.py --host 0.0.0.0 --port 8080
+          env:
+            - name: CPU_BURN_MS
+              value: "200"
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+              nvidia.com/gpu: 1
+          volumeMounts:
+            - name: examples
+              mountPath: /workspace
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: resnet-cifar-infer
+spec:
+  selector:
+    app: resnet-cifar-infer
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080

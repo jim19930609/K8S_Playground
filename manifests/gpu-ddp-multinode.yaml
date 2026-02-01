@@ -1,0 +1,92 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ddp-training
+  labels:
+    app: ddp-training
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: ddp-training
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ddp-training
+spec:
+  serviceName: ddp-training
+  replicas: 2
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: ddp-training
+  template:
+    metadata:
+      labels:
+        app: ddp-training
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      volumes:
+        - name: data
+          emptyDir: {}
+        - name: examples
+          hostPath:
+            path: /root/K8S_Inference_Platform/examples
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: ddp-training
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: trainer
+          image: pytorch/pytorch:2.2.2-cuda12.1-cudnn8-runtime
+          command: ["bash", "-lc"]
+          args:
+            - |
+              set -euo pipefail
+              /workspace/run_resnet_cifar_ddp.sh
+          env:
+            - name: MASTER_ADDR
+              value: "ddp-training-0.ddp-training"
+            - name: MASTER_PORT
+              value: "29500"
+            - name: NNODES
+              value: "2"
+            - name: GPUS_PER_NODE
+              value: "2"
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: EPOCHS
+              value: "1"
+            - name: MAX_STEPS
+              value: "50"
+            - name: BATCH_SIZE
+              value: "128"
+            - name: DATA_DIR
+              value: /data
+            - name: USE_FAKE_DATA
+              value: "1"
+            - name: NCCL_SOCKET_IFNAME
+              value: tailscale0
+            - name: GLOO_SOCKET_IFNAME
+              value: tailscale0
+            - name: TORCH_DISTRIBUTED_DEBUG
+              value: INFO
+          resources:
+            limits:
+              nvidia.com/gpu: 2
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: examples
+              mountPath: /workspace

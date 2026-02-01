@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: resnet-cifar-single
+spec:
+  restartPolicy: Never
+  nodeSelector:
+    kubernetes.io/hostname: ubuntu
+  volumes:
+    - name: data
+      emptyDir: {}
+    - name: examples
+      hostPath:
+        path: /root/K8S_Inference_Platform/examples
+  containers:
+    - name: trainer
+      image: pytorch/pytorch:2.2.2-cuda12.1-cudnn8-runtime
+      command: ["bash", "-lc"]
+      args:
+        - |
+          set -euo pipefail
+          /workspace/run_resnet_cifar_ddp.sh
+      env:
+        - name: NNODES
+          value: "1"
+        - name: GPUS_PER_NODE
+          value: "1"
+        - name: NODE_RANK
+          value: "0"
+        - name: EPOCHS
+          value: "1"
+        - name: MAX_STEPS
+          value: "10"
+        - name: BATCH_SIZE
+          value: "128"
+        - name: DATA_DIR
+          value: "/data"
+      resources:
+        limits:
+          nvidia.com/gpu: 1
+      volumeMounts:
+        - name: data
+          mountPath: /data
+        - name: examples
+          mountPath: /workspace
