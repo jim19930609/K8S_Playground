@@ -1,0 +1,18 @@
+prometheus:
+  url: http://prometheus-server.monitoring.svc
+  port: 80
+
+nodeSelector:
+  kubernetes.io/hostname: ubuntu
+
+rules:
+  external:
+    - seriesQuery: 'DCGM_FI_DEV_GPU_UTIL{namespace!=""}'
+      resources:
+        overrides:
+          namespace:
+            resource: namespace
+      name:
+        matches: "DCGM_FI_DEV_GPU_UTIL"
+        as: "gpu_utilization"
+      metricsQuery: "avg(DCGM_FI_DEV_GPU_UTIL{<<.LabelMatchers>>})"

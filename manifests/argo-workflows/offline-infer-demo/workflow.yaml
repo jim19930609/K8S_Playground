@@ -1,0 +1,94 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: offline-infer-demo-
+spec:
+  entrypoint: pipeline
+  arguments:
+    parameters:
+      - name: image_path
+        value: "/app/datasets/offline_infer_demo/dog.jpg"
+      - name: prompt
+        value: "a photo of"
+      - name: topk
+        value: "5"
+      - name: image
+        value: "docker.io/jimyang201606/offline-infer-demo:latest"
+  templates:
+    - name: pipeline
+      steps:
+        - - name: vgg16-classify
+            template: vgg16-classify
+            arguments:
+              parameters:
+                - name: image_path
+                  value: "{{workflow.parameters.image_path}}"
+                - name: topk
+                  value: "{{workflow.parameters.topk}}"
+                - name: image
+                  value: "{{workflow.parameters.image}}"
+        - - name: vlm-caption
+            template: vlm-caption
+            arguments:
+              parameters:
+                - name: image_path
+                  value: "{{workflow.parameters.image_path}}"
+                - name: prompt
+                  value: "{{workflow.parameters.prompt}} {{steps.vgg16-classify.outputs.parameters.top1_label}}"
+                - name: image
+                  value: "{{workflow.parameters.image}}"
+
+    - name: vgg16-classify
+      inputs:
+        parameters:
+          - name: image_path
+          - name: topk
+          - name: image
+      outputs:
+        parameters:
+          - name: top1_label
+            valueFrom:
+              path: /tmp/top1_label.txt
+          - name: topk_json
+            valueFrom:
+              path: /tmp/topk.json
+      container:
+        image: "{{inputs.parameters.image}}"
+        command: ["python", "/app/examples/offline_infer_demo/vgg16_infer.py"]
+        args:
+          - "--image"
+          - "{{inputs.parameters.image_path}}"
+          - "--topk"
+          - "{{inputs.parameters.topk}}"
+          - "--out-json"
+          - "/tmp/topk.json"
+          - "--out-top1"
+          - "/tmp/top1_label.txt"
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+
+    - name: vlm-caption
+      inputs:
+        parameters:
+          - name: image_path
+          - name: prompt
+          - name: image
+      outputs:
+        parameters:
+          - name: caption
+            valueFrom:
+              path: /tmp/caption.txt
+      container:
+        image: "{{inputs.parameters.image}}"
+        command: ["python", "/app/examples/offline_infer_demo/vlm_caption_infer.py"]
+        args:
+          - "--image"
+          - "{{inputs.parameters.image_path}}"
+          - "--prompt"
+          - "{{inputs.parameters.prompt}}"
+          - "--out-caption"
+          - "/tmp/caption.txt"
+        resources:
+          limits:
+            nvidia.com/gpu: 1

@@ -1,0 +1,22 @@
+server:
+  nodeSelector:
+    kubernetes.io/hostname: ubuntu
+  global:
+    scrape_interval: 15s
+  persistentVolume:
+    enabled: false
+
+extraScrapeConfigs: |
+  - job_name: dcgm-exporter
+    static_configs:
+      - targets:
+          - 100.88.23.1:31940
+    relabel_configs:
+      - target_label: namespace
+        replacement: default
+
+alertmanager:
+  enabled: false
+
+prometheus-pushgateway:
+  enabled: false

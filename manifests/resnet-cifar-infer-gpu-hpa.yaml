@@ -1,0 +1,19 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: resnet-cifar-infer-gpu
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: resnet-cifar-infer
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+    - type: External
+      external:
+        metric:
+          name: gpu_utilization
+        target:
+          type: AverageValue
+          averageValue: "40"

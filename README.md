@@ -122,3 +122,60 @@ kubectl delete pod hpa-load --ignore-not-found
 ```
 
 To disable CPU burn, set `CPU_BURN_MS=0` or remove the env var from the deployment manifest.
+
+## HPA (GPU Utilization, minimal Helm)
+This uses DCGM Exporter + Prometheus + Prometheus Adapter to expose GPU utilization as an
+external metric for HPA. The setup below is the minimal chain needed for HPA.
+
+### 1) Install Helm (if not installed)
+```bash
+curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+```
+
+### 2) Add Helm repos and create namespace
+```bash
+helm repo add nvidia https://nvidia.github.io/dcgm-exporter/helm-charts
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+kubectl create ns monitoring || true
+```
+
+### 3) Install DCGM Exporter (GPU metrics)
+```bash
+helm upgrade --install dcgm-exporter nvidia/dcgm-exporter -n monitoring \
+  -f manifests/helm-values/dcgm-exporter.yaml
+```
+
+### 4) Install Prometheus (minimal, no PVC)
+```bash
+helm upgrade --install prometheus prometheus-community/prometheus -n monitoring \
+  -f manifests/helm-values/prometheus.yaml
+```
+
+### 5) Install Prometheus Adapter (external metrics API)
+```bash
+helm upgrade --install prometheus-adapter prometheus-community/prometheus-adapter -n monitoring \
+  -f manifests/helm-values/prometheus-adapter.yaml
+```
+
+### 6) Verify external metric exists
+```bash
+kubectl get --raw /apis/external.metrics.k8s.io/v1beta1
+kubectl get --raw /apis/external.metrics.k8s.io/v1beta1/namespaces/default/gpu_utilization
+```
+
+### 7) Apply GPU HPA
+```bash
+kubectl apply -f manifests/resnet-cifar-infer-deploy.yaml
+kubectl apply -f manifests/resnet-cifar-infer-gpu-hpa.yaml
+kubectl get hpa resnet-cifar-infer-gpu -o wide
+```
+
+### 8) Optional: generate GPU load (to trigger scale-up)
+```bash
+kubectl apply -f /root/gpu-load.yaml
+```
+
+Notes:
+- `manifests/helm-values/prometheus.yaml` scrapes dcgm-exporter via NodePort.
+- If you change GPU node IPs or NodePort, update that file.
